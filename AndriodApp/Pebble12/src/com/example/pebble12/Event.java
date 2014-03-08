@@ -10,7 +10,7 @@ public class Event {
 	String title;
 	String description;
 	int hashCode;
-
+	
 	
 	public Event(int startDay, int endDay, int startTime, int endTime, String title, String desc) {
 		this.startDay = startDay;

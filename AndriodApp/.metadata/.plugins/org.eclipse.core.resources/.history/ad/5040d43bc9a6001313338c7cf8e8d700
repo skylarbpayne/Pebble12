@@ -1,0 +1,10 @@
+package com.example.pebble12;
+
+import android.content.Context;
+
+public class Pebble {
+	
+	Context ctx;
+	public Pebble
+
+}

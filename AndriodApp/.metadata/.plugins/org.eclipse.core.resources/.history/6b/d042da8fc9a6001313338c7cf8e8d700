@@ -1,0 +1,36 @@
+package com.example.pebble12;
+
+import com.getpebble.android.kit.PebbleKit;
+
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.util.Log;
+
+public class Pebble {
+	
+	Context ctx;
+	
+	public Pebble(Context ctx) {
+		this.ctx = ctx;
+		
+		
+		   //Get when pebble connects and disconnects
+        PebbleKit.registerPebbleConnectedReceiver(ctx, new BroadcastReceiver() {
+        	  @Override
+        	  public void onReceive(Context context, Intent intent) {
+        	    Log.i(MainActivity.TAG, "Pebble connected!");
+        	    MainActivity.notifyPebbleOfChanges(); //Do a new change, we don't know when the last time we were connected
+        	  }
+        	});
+
+        	PebbleKit.registerPebbleDisconnectedReceiver(ctx, new BroadcastReceiver() {
+        	  @Override
+        	  public void onReceive(Context context, Intent intent) {
+        	    Log.i(MainActivity.TAG, "Pebble disconnected!");
+        	    MainActivity.timer.cancel(); //Stop the timer, until we reconnect
+        	  }
+        	});
+	}
+
+}

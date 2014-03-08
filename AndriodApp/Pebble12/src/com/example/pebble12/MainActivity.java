@@ -32,6 +32,8 @@ public class MainActivity extends Activity {
 	
 	public static Timer timer;
     final static Handler handler = new Handler();
+    static Pebble pebble;
+    
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,29 +42,17 @@ public class MainActivity extends Activity {
         context = getApplicationContext();
         TAG = getLocalClassName();
         timer = new Timer();
+        pebble = new Pebble(context);
+        
+        //Launch the app on the pebble
+        PebbleKit.startAppOnPebble(getApplicationContext(), Pebble.PEBBLE_APP_UUID);
+
         
         boolean connected = PebbleKit.isWatchConnected(getApplicationContext());
         Log.i(getLocalClassName(), "Pebble is " + (connected ? "connected" : "not connected"));
                 
-        //Get when pebble connects and disconnects
-        PebbleKit.registerPebbleConnectedReceiver(getApplicationContext(), new BroadcastReceiver() {
-        	  @Override
-        	  public void onReceive(Context context, Intent intent) {
-        	    Log.i(getLocalClassName(), "Pebble connected!");
-        	  }
-        	});
-
-        	PebbleKit.registerPebbleDisconnectedReceiver(getApplicationContext(), new BroadcastReceiver() {
-        	  @Override
-        	  public void onReceive(Context context, Intent intent) {
-        	    Log.i(getLocalClassName(), "Pebble disconnected!");
-        	  }
-        	});
-        	
-        	HashSet<Event> startingEvents = getEventsNext24Hours();
-        	for (Event e : startingEvents) {
-        		events.add(e);
-        	}
+        	//Start the check for updates
+        	checkForUpdates();
     }
 
 /*
@@ -100,17 +90,21 @@ public class MainActivity extends Activity {
     	HashSet<Event> newEvents = MainActivity.getEventsNext24Hours();
     	
     	//TAKES O(2n) time, rather than O(1)
+    	//REMOVE EVENT
     	for (Event e : MainActivity.events){
     		if (!newEvents.contains(e)) {
         		Log.d(MainActivity.TAG,"Removed event:" + e.title);
         		//SIGNAL TO PEBBLE
+        		pebble.sendEvent(e,false);
     		}
     	}
     	
+    	//ADD EVENT
     	for (Event e : newEvents) {
     		if (!MainActivity.events.contains(e)) {
         		Log.d(MainActivity.TAG,"Added event:" + e.title);
         		//SIGNAL TO PEBBLE
+        		pebble.sendEvent(e,true);
     		}
     	}
     	MainActivity.events = newEvents; 
@@ -164,7 +158,7 @@ public class MainActivity extends Activity {
     		      //String displayName = calCursor.getString(1);
     		      Event e = new Event(startDay,endDay,startMinute,endMinute,title,description);
     		      events.add(e);
-    		      Log.d(TAG,"start Day:" + startDay + " start minute: " + startMinute + " title:" + title);
+    		      //Log.d(TAG,"start Day:" + startDay + " start minute: " + startMinute + " title:" + title);
     		   } while (calCursor.moveToNext());  
     		}
     	
