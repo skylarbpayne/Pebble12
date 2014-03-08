@@ -1,6 +1,1 @@
-This is the pebble12 app, a watchapp you can use to quickly tell if you are busy.
-It comes with a companion android app
-
-Updating again
-and again
-changed email
+This is our readme for Pebble12, a wonderful pebble app that shows you when you are busy
