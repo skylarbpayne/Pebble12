@@ -3,3 +3,4 @@ It comes with a companion android app
 
 Updating again
 and again
+changed email
