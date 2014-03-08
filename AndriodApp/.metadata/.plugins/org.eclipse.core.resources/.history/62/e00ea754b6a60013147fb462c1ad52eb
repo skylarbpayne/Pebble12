@@ -1,0 +1,16 @@
+package com.example.pebble12;
+
+public class CatchChangesReceiver extends BroadcastReceiver {
+
+    @Override
+    public void onReceive(Context context, Intent intent) {
+    // add processing here with some query to content provider
+        // in my project I use this selection for getting events:
+         final String SELECTION = CalendarContract.Events.CALENDAR_ID + "="
+            + calendarId + " AND " + "("
+            + CalendarContract.Events.DIRTY + "=" + 1 + " OR "
+            + CalendarContract.Events.DELETED + "=" + 1 + ")" + " AND "
+            + CalendarContract.Events.DTEND + " > "
+            + Calendar.getInstance().getTimeInMillis();
+    }
+}

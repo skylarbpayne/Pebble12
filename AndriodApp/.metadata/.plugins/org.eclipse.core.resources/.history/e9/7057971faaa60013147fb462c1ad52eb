@@ -1,0 +1,85 @@
+package com.example.pebble12;
+
+import android.app.Activity;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.database.Cursor;
+import android.net.Uri;
+import android.os.Bundle;
+import android.provider.CalendarContract;
+import android.provider.CalendarContract.Calendars;
+import android.provider.CalendarContract.Events;
+import android.util.Log;
+import android.view.Menu;
+
+import com.getpebble.android.kit.PebbleKit;
+
+public class MainActivity extends Activity {
+
+	
+	public Context context;
+
+	
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        context = getApplicationContext();
+        
+        boolean connected = PebbleKit.isWatchConnected(getApplicationContext());
+        Log.i(getLocalClassName(), "Pebble is " + (connected ? "connected" : "not connected"));
+        
+        
+        
+        //Get when pebble connects and disconnects
+        PebbleKit.registerPebbleConnectedReceiver(getApplicationContext(), new BroadcastReceiver() {
+        	  @Override
+        	  public void onReceive(Context context, Intent intent) {
+        	    Log.i(getLocalClassName(), "Pebble connected!");
+        	  }
+        	});
+
+        	PebbleKit.registerPebbleDisconnectedReceiver(getApplicationContext(), new BroadcastReceiver() {
+        	  @Override
+        	  public void onReceive(Context context, Intent intent) {
+        	    Log.i(getLocalClassName(), "Pebble disconnected!");
+        	  }
+        	});
+        	
+        	Uri.Builder eventsUriBuilder = CalendarContract.Instances.CONTENT_URI
+                    .buildUpon();
+        	String[] projection = 
+        		      new String[]{
+        		            CalendarContract.Events.DTSTART,
+        		            CalendarContract.Events.DTEND,
+        		            CalendarContract.Events.DESCRIPTION,
+        		          	};
+        		Cursor calCursor = 
+        		      getContentResolver().
+        		            query(Events.CONTENT_URI, //Calendars.CONTENT_URI, 
+        		                  projection, 
+        		                  null,//Calendars.VISIBLE + " = 1", 
+        		                  null, 
+        		                  null);//Calendars._ID + " ASC");
+        		if (calCursor.moveToFirst()) {
+        		   do {
+        		      long startTime = calCursor.getLong(0);
+        		      long endTime = calCursor.getLong(1);
+        		      String title = calCursor.getString(2);
+
+        		      //String displayName = calCursor.getString(1);
+        		      Log.d(getLocalClassName(),"start time:" + startTime +  " title:" + description);
+        		   } while (calCursor.moveToNext());
+        		}
+    }
+
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // Inflate the menu; this adds items to the action bar if it is present.
+        getMenuInflater().inflate(R.menu.main, menu);
+        return true;
+    }
+    
+}

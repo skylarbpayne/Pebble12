@@ -1,0 +1,10 @@
+package com.example.pebble12;
+
+public class Day {
+	int startDay;
+	int endDay;
+	long startTime;
+	long endTime;
+	
+	public Day(long start)
+}

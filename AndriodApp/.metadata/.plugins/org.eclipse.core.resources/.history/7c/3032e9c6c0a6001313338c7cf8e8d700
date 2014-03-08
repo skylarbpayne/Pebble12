@@ -1,0 +1,114 @@
+package com.example.pebble12;
+
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.Set;
+
+import android.app.Activity;
+import android.content.BroadcastReceiver;
+import android.content.ContentUris;
+import android.content.Context;
+import android.content.Intent;
+import android.database.Cursor;
+import android.net.Uri;
+import android.os.Bundle;
+import android.provider.CalendarContract;
+import android.provider.CalendarContract.Calendars;
+import android.provider.CalendarContract.Instances;
+import android.util.Log;
+import android.view.Menu;
+
+import com.getpebble.android.kit.PebbleKit;
+
+public class MainActivity extends Activity {
+
+	
+	public Context context;
+	public static final long TWENTY_FOUR_HOURS_IN_MILLISECONDS = 86400000;
+	public static ArrayList<Event> events = new ArrayList<Event>();
+	
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        context = getApplicationContext();
+        
+        boolean connected = PebbleKit.isWatchConnected(getApplicationContext());
+        Log.i(getLocalClassName(), "Pebble is " + (connected ? "connected" : "not connected"));
+                
+        //Get when pebble connects and disconnects
+        PebbleKit.registerPebbleConnectedReceiver(getApplicationContext(), new BroadcastReceiver() {
+        	  @Override
+        	  public void onReceive(Context context, Intent intent) {
+        	    Log.i(getLocalClassName(), "Pebble connected!");
+        	  }
+        	});
+
+        	PebbleKit.registerPebbleDisconnectedReceiver(getApplicationContext(), new BroadcastReceiver() {
+        	  @Override
+        	  public void onReceive(Context context, Intent intent) {
+        	    Log.i(getLocalClassName(), "Pebble disconnected!");
+        	  }
+        	});
+        	
+        	ArrayList<Event> startingEvents = getEventsNext24Hours();
+        	for (Event e : startingEvents) {
+        		events.add(e);
+        	}
+    }
+
+
+    public static ArrayList<Event> getEventsNext24Hours() {
+    	
+    	ArrayList<Event> events = new ArrayList<Event>();
+    	
+    	Uri.Builder eventsUriBuilder = CalendarContract.Instances.CONTENT_URI
+                .buildUpon();
+    	String[] projection = 
+    		      new String[]{
+    		            Instances.START_DAY,
+    		            Instances.END_DAY,
+    		            Instances.START_MINUTE,
+    		            Instances.END_MINUTE,
+    		            CalendarContract.Events.TITLE,
+    		            CalendarContract.Events.DESCRIPTION
+    		          	};
+    		
+    		Uri.Builder builder = Instances.CONTENT_URI.buildUpon();
+    		long now = new Date().getTime();
+    		ContentUris.appendId(builder, now);
+    		ContentUris.appendId(builder, now + TWENTY_FOUR_HOURS_IN_MILLISECONDS);
+    		//DateUtils.WEEK_IN_MILLIS
+    	
+    		Cursor calCursor = 
+    		            query(builder.build(), 
+    		                  projection, 
+    		                  Calendars.VISIBLE + " = 1", 
+    		                  null, 
+    		                 "startDay ASC, startMinute ASC");//Calendars._ID + " ASC");
+    		if (calCursor.moveToFirst()) {
+    		   do {
+    		      int startDay = calCursor.getInt(0);
+    		      int endDay = calCursor.getInt(1);
+    		      int startMinute = calCursor.getInt(2); //minutes from midnight
+    		      int endMinute = calCursor.getInt(3); //minutes from midnight
+    		      String title = calCursor.getString(4);
+    		      String description = calCursor.getString(5);
+
+    		      //String displayName = calCursor.getString(1);
+    		      Event e = new Event(startDay,endDay,startMinute,endMinute,title,description);
+    		      events.add(e);
+    		      Log.d(getLocalClassName(),"start Day:" + startDay + " start minute: " + startMinute + " title:" + title);
+    		   } while (calCursor.moveToNext());  
+    		}
+    	
+    		return events;
+    }
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // Inflate the menu; this adds items to the action bar if it is present.
+        getMenuInflater().inflate(R.menu.main, menu);
+        return true;
+    }
+    
+}

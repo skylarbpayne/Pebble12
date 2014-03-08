@@ -1,0 +1,3 @@
+location: ~/.android/debug.keystore
+password: android 
+hash: 17eb256d69cd0b5207edafafed4f4651662ed08a

@@ -1,0 +1,19 @@
+package com.example.pebble12;
+
+public class Event {
+	int startDay;
+	int endDay;
+	int startTime;
+	int endTime;
+	String title;
+	String description;
+	
+	public Event(int startDay, int endDay, int startTime, int endTime, String title, String desc) {
+		this.startDay = startDay;
+		this.endDay = endDay;
+		this.startTime = startTime;
+		this.endTime = endTime;
+		this.title = title;
+		this.description = desc;
+	}
+}

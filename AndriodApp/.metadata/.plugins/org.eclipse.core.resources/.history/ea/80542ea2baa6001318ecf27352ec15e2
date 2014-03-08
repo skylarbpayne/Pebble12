@@ -1,0 +1,34 @@
+package com.example.pebble12;
+
+public class Event {
+	int startDay;
+	int endDay;
+	int startTime;
+	int endTime;
+	String title;
+	String description;
+	
+	public Event(int startDay, int endDay, int startTime, int endTime, String title, String desc) {
+		this.startDay = startDay;
+		this.endDay = endDay;
+		this.startTime = startTime;
+		this.endTime = endTime;
+		this.title = title;
+		this.description = desc;
+	}
+	
+	@Override
+	public boolean equals(Object other){
+		Event test = (Event) other;
+		if(this.startDay == test.startDay &&
+				this.endDay == (Event) test.endDay &&
+				this.startTime == test.startTime &&
+				this.endTime == test.endTime &&
+				this.title == test.title &&
+				this.description == test.description) {
+			return true;
+		}
+		else
+			return false;
+	}
+}

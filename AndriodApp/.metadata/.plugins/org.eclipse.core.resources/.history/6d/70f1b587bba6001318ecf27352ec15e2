@@ -1,0 +1,43 @@
+package com.example.pebble12;
+
+public class Event {
+	int startDay;
+	int endDay;
+	int startTime;
+	int endTime;
+	String title;
+	String description;
+	
+	public Event(int startDay, int endDay, int startTime, int endTime, String title, String desc) {
+		this.startDay = startDay;
+		this.endDay = endDay;
+		this.startTime = startTime;
+		this.endTime = endTime;
+		this.title = title;
+		this.description = desc;
+	}
+	
+	
+	  public int hashCode() {
+	        return new HashCodeBuilder(17, 31). // two randomly chosen prime numbers
+	            // if deriving: appendSuper(super.hashCode()).
+	            append(name).
+	            append(age).
+	            toHashCode();
+	    }
+	  
+	@Override
+	public boolean equals(Object other){
+		Event test = (Event) other;
+		if(this.startDay == test.startDay &&
+				this.endDay == test.endDay &&
+				this.startTime == test.startTime &&
+				this.endTime == test.endTime &&
+				this.title == test.title &&
+				this.description == test.description) {
+			return true;
+		}
+		else
+			return false;
+	}
+}
