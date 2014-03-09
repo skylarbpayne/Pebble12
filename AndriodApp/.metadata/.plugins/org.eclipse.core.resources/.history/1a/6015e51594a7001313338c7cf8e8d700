@@ -91,9 +91,7 @@ public class Pebble {
         	      PebbleKit.sendAckToPebble(Pebble.ctx, transactionId);
         	      pending_events.clear();
         	      MainActivity.events.clear();
-        	      
-        	      //Reset the pebble's calendar
-        	      MainActivity.notifyPebbleOfChanges();
+        	      MainActivity.getEventsNext24Hours();
         	    }
         	});
 	}

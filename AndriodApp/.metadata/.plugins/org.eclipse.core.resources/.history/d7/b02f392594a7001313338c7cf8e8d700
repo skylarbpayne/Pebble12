@@ -92,7 +92,7 @@ public class Pebble {
         	      pending_events.clear();
         	      MainActivity.events.clear();
         	      
-        	      //Reset the pebble's calendar
+        	      //Reset the pebble activities
         	      MainActivity.notifyPebbleOfChanges();
         	    }
         	});

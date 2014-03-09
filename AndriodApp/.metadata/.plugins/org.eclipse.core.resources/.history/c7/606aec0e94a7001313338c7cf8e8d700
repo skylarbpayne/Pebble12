@@ -87,13 +87,11 @@ public class Pebble {
         	    public void receiveData(final Context context, final int transactionId, final PebbleDictionary data) {
         	      Log.i(MainActivity.TAG, "Received value=" + data.getUnsignedInteger(0) + " for key: 0");
 
-        	      //We assume the watchface was opened up, so clear all data
+        	      //We assume the app was reset, so clear all data
         	      PebbleKit.sendAckToPebble(Pebble.ctx, transactionId);
         	      pending_events.clear();
         	      MainActivity.events.clear();
-        	      
-        	      //Reset the pebble's calendar
-        	      MainActivity.notifyPebbleOfChanges();
+        	      MainActivity.getEventsNext24Hours();
         	    }
         	});
 	}

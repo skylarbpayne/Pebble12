@@ -128,7 +128,7 @@ int calculateEndingAngle(Event e,int startingAngle) {
         int daysSinceEpoc = startDay - EPOC_OFFSET;
         long epoc_start_time = daysSinceEpoc * SECONDS_IN_DAY + SECONDS_IN_MINUTE * startTime;
 
-        APP_LOG(APP_LOG_LEVEL_DEBUG, "startTime:  %d nowTime: %lu duration: %d, epoc_start_time %lu ", startTime,nowTime,dur,epoc_start_time);
+//        APP_LOG(APP_LOG_LEVEL_DEBUG, "startTime:  %d nowTime: %lu duration: %d, epoc_start_time %lu ", startTime,nowTime,dur,epoc_start_time);
 
 	if (dur >= 720){ //If it's longer than 12 hours
 		angle = (int) (startingAngle + TRIG_MAX_ANGLE - angle_1) % TRIG_MAX_ANGLE;
@@ -143,7 +143,7 @@ int calculateEndingAngle(Event e,int startingAngle) {
 		totalTime = totalTime % 720; //reset every 720 minutes, so we go back.
 		angle = (int) ((totalTime / 2) * angle_1);
 	}
-        APP_LOG(APP_LOG_LEVEL_DEBUG, "Ending angle: %d", angle);
+//        APP_LOG(APP_LOG_LEVEL_DEBUG, "Ending angle: %d for event %s", angle,e.title);
 	return angle;
 }
 
@@ -426,6 +426,15 @@ static void init(void) {
    const uint32_t inbound_size = 1024;
    const uint32_t outbound_size = 8;
    app_message_open(inbound_size, outbound_size);
+
+
+   //Initalize the data by sending data to the phone, and letting it know we want some yummy data!
+ DictionaryIterator *iter;
+ app_message_outbox_begin(&iter);
+ Tuplet value = TupletInteger(1, 1);
+ dict_write_tuplet(iter, &value);
+ app_message_outbox_send();
+
 }
 
 static void deinit(void) {
