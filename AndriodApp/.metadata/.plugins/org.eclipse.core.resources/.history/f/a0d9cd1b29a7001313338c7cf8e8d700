@@ -1,0 +1,181 @@
+package com.example.pebble12;
+
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Timer;
+import java.util.TimerTask;
+
+import android.app.Activity;
+import android.content.ContentUris;
+import android.content.Context;
+import android.database.Cursor;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.Handler;
+import android.provider.CalendarContract;
+import android.provider.CalendarContract.Calendars;
+import android.provider.CalendarContract.Instances;
+import android.util.Log;
+import android.view.Menu;
+
+import com.getpebble.android.kit.PebbleKit;
+
+public class MainActivity extends Activity {
+
+	
+	public static String TAG;
+	public static Context context;
+	public static final long TWENTY_FOUR_HOURS_IN_MILLISECONDS = 86400000;
+	public static HashSet<Event> events = new HashSet<Event>();
+	
+	public static Timer timer;
+    final static Handler handler = new Handler();
+    static Pebble pebble;
+    
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        context = getApplicationContext();
+        TAG = getLocalClassName();
+        timer = new Timer();
+        pebble = new Pebble(context);
+        
+        //Launch the app on the pebble
+        PebbleKit.startAppOnPebble(getApplicationContext(), Pebble.PEBBLE_APP_UUID);
+
+        
+        boolean connected = PebbleKit.isWatchConnected(getApplicationContext());
+        Log.i(getLocalClassName(), "Pebble is " + (connected ? "connected" : "not connected"));
+                
+        	//Start the check for updates
+        	checkForUpdates();
+    }
+
+/*
+ * Called every 12 hours to update the clock face, giving it the next 24 hours worth of events.
+ */
+    public void checkForUpdates() {
+    	
+    	Log.d(TAG,"RAN GET EVENT THREAD");
+    	timer.cancel();
+    	timer = new Timer();
+    	
+    	//Get 12 Hours in the future
+    	Date tweleveHours = new Date();
+    	tweleveHours.setTime(new Date().getTime() + TWENTY_FOUR_HOURS_IN_MILLISECONDS/2);
+    	
+    	//Date fiveseconds = new Date();
+    	//fiveseconds.setTime(new Date().getTime() + 5000);
+
+        timer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                handler.post(new Runnable() {
+                    public void run() {
+                    	checkForUpdates();
+                    }
+                });
+            }
+        },tweleveHours);
+        
+        notifyPebbleOfChanges();
+    }
+    
+    public static void notifyPebbleOfChanges() {
+    	
+    	HashSet<Event> newEvents = MainActivity.getEventsNext24Hours();
+    	
+    	for (Event e : newEvents) {
+    		pebble.sendEvent(e);
+    		try {
+				Thread.sleep(200);
+			} catch (InterruptedException e1) {
+				e1.printStackTrace();
+			}
+    	}
+    	//pebble.COUNTER++;
+//    	//TAKES O(2n) time, rather than O(1)
+//    	//REMOVE EVENT
+//    	for (Event e : MainActivity.events){
+//    		if (!newEvents.contains(e)) {
+//        		Log.d(MainActivity.TAG,"Removed event:" + e.title);
+//        		//SIGNAL TO PEBBLE
+//        		pebble.sendEvent(e,false);
+//    		}
+//    	}
+//    	
+//    	//ADD EVENT
+//    	for (Event e : newEvents) {
+//    		if (!MainActivity.events.contains(e)) {
+//        		Log.d(MainActivity.TAG,"Added event:" + e.title);
+//        		//SIGNAL TO PEBBLE
+//        		pebble.sendEvent(e,true);
+//    		}
+//    	}
+    	MainActivity.events = newEvents; 
+	
+    }
+    
+    /*
+     * Grabs the next 24 hours of events from the user's phone,
+     * only grabbing displayed events.
+     * @return A list of events in the next 24 hours
+     */
+    public static HashSet<Event> getEventsNext24Hours() {
+    	
+    	
+    	HashSet<Event> events = new HashSet<Event>();
+    	
+    	Uri.Builder eventsUriBuilder = CalendarContract.Instances.CONTENT_URI
+                .buildUpon();
+    	String[] projection = 
+    		      new String[]{
+    		            Instances.START_DAY,
+    		            Instances.END_DAY,
+    		            Instances.START_MINUTE,
+    		            Instances.END_MINUTE,
+    		            CalendarContract.Events.TITLE,
+    		            CalendarContract.Events.DESCRIPTION
+    		          	};
+    		
+    		Uri.Builder builder = Instances.CONTENT_URI.buildUpon();
+    		long now = new Date().getTime();
+    		ContentUris.appendId(builder, now);
+    		ContentUris.appendId(builder, now + TWENTY_FOUR_HOURS_IN_MILLISECONDS);
+    		//DateUtils.WEEK_IN_MILLIS
+    	
+    		Cursor calCursor = 
+    		      context.getContentResolver().
+    		            query(builder.build(), 
+    		                  projection, 
+    		                  Calendars.VISIBLE + " = 1", 
+    		                  null, 
+    		                 "startDay ASC, startMinute ASC");//Calendars._ID + " ASC");
+    		if (calCursor.moveToFirst()) {
+    		   do {
+    		      int startDay = calCursor.getInt(0);
+    		      int endDay = calCursor.getInt(1);
+    		      int startMinute = calCursor.getInt(2); //minutes from midnight
+    		      int endMinute = calCursor.getInt(3); //minutes from midnight
+    		      String title = calCursor.getString(4);
+    		      String description = calCursor.getString(5);
+
+    		      //String displayName = calCursor.getString(1);
+    		      Event e = new Event(startDay,endDay,startMinute,endMinute,title,description);
+    		      events.add(e);
+    		      //Log.d(TAG,"start Day:" + startDay + " start minute: " + startMinute + " title:" + title);
+    		   } while (calCursor.moveToNext());  
+    		}
+    	
+    		return events;
+    }
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // Inflate the menu; this adds items to the action bar if it is present.
+        getMenuInflater().inflate(R.menu.main, menu);
+        return true;
+    }
+    
+}

@@ -3,6 +3,7 @@ package com.example.pebble12;
 import android.util.Log;
 
 public class Event {
+	
 	int startDay;
 	int endDay;
 	int startTime;
@@ -10,7 +11,7 @@ public class Event {
 	String title;
 	String description;
 	int hashCode;
-	
+	int idCounter;
 	
 	public Event(int startDay, int endDay, int startTime, int endTime, String title, String desc) {
 		this.startDay = startDay;

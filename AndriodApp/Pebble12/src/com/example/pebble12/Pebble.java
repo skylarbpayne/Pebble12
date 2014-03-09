@@ -1,5 +1,6 @@
 package com.example.pebble12;
 
+import java.util.HashMap;
 import java.util.UUID;
 
 import android.content.BroadcastReceiver;
@@ -23,9 +24,10 @@ public class Pebble {
 	public final static UUID PEBBLE_APP_UUID = UUID.fromString("3a7152cd-b1f6-4d5d-a93b-be3dce12116d");
 	static int COUNTER = 0; //Used to give unique ID's to pebble events
 
+	HashMap<Integer,PebbleDictionary> pending_events = new HashMap<Integer,PebbleDictionary>();
 
 	
-	public Pebble(Context ctx) {
+	public Pebble(final Context ctx) {
 		this.ctx = ctx;
 		
 		
@@ -66,6 +68,10 @@ public class Pebble {
         	  @Override
         	  public void receiveNack(Context context, int transactionId) {
         	    Log.i(MainActivity.TAG, "Received nack for transaction " + transactionId);
+        	//    PebbleDictionary reData = pending_events.get(transactionId);
+        	//	PebbleKit.sendDataToPebbleWithTransactionId(ctx, PEBBLE_APP_UUID, reData,COUNTER);
+
+        	    
         	  }
         	});
         	
@@ -83,20 +89,23 @@ public class Pebble {
 	 * Sends an event to the app, and tells whether it's been added or removed
 	 * @param e
 	 * @param added
-	 */
-	public void sendEvent(Event e,boolean added) {
+	 */ 
+	public void sendEvent(Event e, boolean added) {
 		byte b_false = 0;
 		byte b_true = 1;
 		PebbleDictionary data = new PebbleDictionary();
-		data.addInt32(0,COUNTER); //The unique id for this event
+//		data.addInt32(0,e.hashCode); //The batch number of this transaction
 		data.addInt8(1, added ? b_true : b_false); //I have no idea what I'm doing
 		data.addInt32(2, e.startDay);
 		data.addInt32(3,e.endDay);
 		data.addInt32(4,e.startTime);
 		data.addInt32(5,e.endTime);
 		data.addString(6, e.title);
-		PebbleKit.sendDataToPebbleWithTransactionId(ctx, PEBBLE_APP_UUID, data,COUNTER); //counter is also transaction ID
+		pending_events.put(COUNTER, data);
+
 		COUNTER++;
+		PebbleKit.sendDataToPebbleWithTransactionId(ctx, PEBBLE_APP_UUID, data,COUNTER); //counter is also transaction ID
+		
 	}
 
 }
