@@ -1,18 +1,15 @@
 #include "Pebble12.h" //This will contain paths for the marks on the analog watch face.
-#include "arcs.h"
-#include "string.h"
 #include "stdlib.h"
+#include "string.h"
+/*
+ * Used for DrawArc (see below)
+ */
+static int angle_90 = TRIG_MAX_ANGLE / 4;
+static int angle_180 = TRIG_MAX_ANGLE / 2;
+static int angle_270 = 3 * TRIG_MAX_ANGLE / 4;
 
 Layer* analog_face_layer;
 Layer* hands_layer;
-
-Layer* header_layer;
-TextLayer* text_time_layer;
-char time_buffer[] = "00:00";
-TextLayer* date_layer;
-TextLayer* num_layer;
-char date_buffer[] = "xxxxxx";
-char num_buffer[] = "0000";
 
 static GPath* minute_hand; //Will be used to store shape of minute hand
 static GPath* hour_hand; //Same ^^ but for hour hand
@@ -20,6 +17,7 @@ static GPath* tick_paths[NUM_CLOCK_TICKS]; //stores all positions of marks on an
 
 Window* window;
 
+int16_t lim_dim;
 
 typedef struct {
         int start_day;
@@ -58,7 +56,6 @@ void freeArray(Array *a) {
   a->used = a->size = 0;
 }
 
-
 void removeElement(Array *a, Event e) {
         unsigned int i = 0;
 
@@ -80,6 +77,7 @@ void removeElement(Array *a, Event e) {
         }
 }
 
+
 void out_sent_handler(DictionaryIterator *sent, void *context) {
    // outgoing message was delivered
  }
@@ -91,33 +89,33 @@ void out_sent_handler(DictionaryIterator *sent, void *context) {
 
 
  void in_received_handler(DictionaryIterator *received, void *context) {
-         APP_LOG(APP_LOG_LEVEL_DEBUG, "We recieved a message!");
+	 APP_LOG(APP_LOG_LEVEL_DEBUG, "We recieved a message!");
 
    // incoming message received
-          // Check for fields you expect to receive
+	  // Check for fields you expect to receive
           Tuple *addOrRem = dict_find(received, 1);
           Tuple *sDay = dict_find(received, 2);
-          Tuple *eDay = dict_find(received, 3);
-          Tuple *sTime = dict_find(received, 4);
+	  Tuple *eDay = dict_find(received, 3);
+	  Tuple *sTime = dict_find(received, 4);
           Tuple *eTime = dict_find(received, 5);
           Tuple *tit = dict_find(received, 6);
 
-        int addOrRemove = (int) addOrRem->value->data[0];
-        int startDay = (int) sDay->value->int32;
+	int addOrRemove = (int) addOrRem->value->data[0];
+	int startDay = (int) sDay->value->int32;
         int endDay = (int) eDay->value->int32;
         int startTime = (int) sTime->value->int32;
         int endTime = (int) eTime->value->int32;
-        char *title = tit->value->cstring;
+ 	char *title = tit->value->cstring;
 
           // Add or remove from local repository
-          Event e = {startDay,endDay,startTime,endTime,title};
+	  Event e = {startDay,endDay,startTime,endTime,title};
           if (addOrRemove) {
-                insertArray(&events,e);
+		insertArray(&events,e);
           } else {
-                removeElement(&events,e);
-          }
+		removeElement(&events,e);
+	  }
 
-}
+ }
 
 
  void in_dropped_handler(AppMessageResult reason, void *context) {
@@ -125,37 +123,144 @@ void out_sent_handler(DictionaryIterator *sent, void *context) {
  }
 
 
-static void header_update_proc(Layer* layer, GContext* ctx) {
-  time_t now = time(NULL);
-  struct tm* t = localtime(&now);
 
-  strftime(date_buffer, sizeof(date_buffer), "%a", t);
-  text_layer_set_text(date_layer, date_buffer);
-  strftime(num_buffer, sizeof(num_buffer), "%d", t);
-  text_layer_set_text(num_layer, num_buffer);
+/*\
+|*| DrawArc function thanks to Cameron MacFarland (http://forums.getpebble.com/profile/12561/Cameron%20MacFarland)
+\*/
+static void graphics_draw_arc(GContext *ctx, GPoint center, int radius, int thickness, int start_angle, int end_angle, GColor c) {
+	int32_t xmin = 65535000, xmax = -65535000, ymin = 65535000, ymax = -65535000;
+	int32_t cosStart, sinStart, cosEnd, sinEnd;
+	int32_t r, t;
 
-  strftime(time_buffer, sizeof(time_buffer), "%I:%M", t);
-  graphics_context_set_fill_color(ctx, GColorBlack);
-  graphics_fill_rect(ctx, layer_get_bounds(layer), 0, GCornerNone);
-  text_layer_set_text(text_time_layer, time_buffer);
+	while (start_angle < 0) start_angle += TRIG_MAX_ANGLE;
+	while (end_angle < 0) end_angle += TRIG_MAX_ANGLE;
+
+	start_angle %= TRIG_MAX_ANGLE;
+	end_angle %= TRIG_MAX_ANGLE;
+
+	if (end_angle == 0) end_angle = TRIG_MAX_ANGLE;
+
+	if (start_angle > end_angle) {
+		graphics_draw_arc(ctx, center, radius, thickness, start_angle, TRIG_MAX_ANGLE, c);
+		graphics_draw_arc(ctx, center, radius, thickness, 0, end_angle, c);
+	} else {
+		// Calculate bounding box for the arc to be drawn
+		cosStart = cos_lookup(start_angle);
+		sinStart = sin_lookup(start_angle);
+		cosEnd = cos_lookup(end_angle);
+		sinEnd = sin_lookup(end_angle);
+
+		r = radius;
+		// Point 1: radius & start_angle
+		t = r * cosStart;
+		if (t < xmin) xmin = t;
+		if (t > xmax) xmax = t;
+		t = r * sinStart;
+		if (t < ymin) ymin = t;
+		if (t > ymax) ymax = t;
+
+		// Point 2: radius & end_angle
+		t = r * cosEnd;
+		if (t < xmin) xmin = t;
+		if (t > xmax) xmax = t;
+		t = r * sinEnd;
+		if (t < ymin) ymin = t;
+		if (t > ymax) ymax = t;
+
+		r = radius - thickness;
+		// Point 3: radius-thickness & start_angle
+		t = r * cosStart;
+		if (t < xmin) xmin = t;
+		if (t > xmax) xmax = t;
+		t = r * sinStart;
+		if (t < ymin) ymin = t;
+		if (t > ymax) ymax = t;
+
+		// Point 4: radius-thickness & end_angle
+		t = r * cosEnd;
+		if (t < xmin) xmin = t;
+		if (t > xmax) xmax = t;
+		t = r * sinEnd;
+		if (t < ymin) ymin = t;
+		if (t > ymax) ymax = t;
+
+		// Normalization
+		xmin /= TRIG_MAX_RATIO;
+		xmax /= TRIG_MAX_RATIO;
+		ymin /= TRIG_MAX_RATIO;
+		ymax /= TRIG_MAX_RATIO;
+
+		// Corrections if arc crosses X or Y axis
+		if ((start_angle < angle_90) && (end_angle > angle_90)) {
+			ymax = radius;
+		}
+
+		if ((start_angle < angle_180) && (end_angle > angle_180)) {
+			xmin = -radius;
+		}
+
+		if ((start_angle < angle_270) && (end_angle > angle_270)) {
+			ymin = -radius;
+		}
+
+		// Slopes for the two sides of the arc
+		float sslope = (float)cosStart/ (float)sinStart;
+		float eslope = (float)cosEnd / (float)sinEnd;
+
+		if (end_angle == TRIG_MAX_ANGLE) eslope = -1000000;
+
+		int ir2 = (radius - thickness) * (radius - thickness);
+		int or2 = radius * radius;
+
+		graphics_context_set_stroke_color(ctx, c);
+
+		for (int x = xmin; x <= xmax; x++) {
+			for (int y = ymin; y <= ymax; y++)
+			{
+				int x2 = x * x;
+				int y2 = y * y;
+
+				if (
+					(x2 + y2 < or2 && x2 + y2 >= ir2) && (
+						(y > 0 && start_angle < angle_180 && x <= y * sslope) ||
+						(y < 0 && start_angle > angle_180 && x >= y * sslope) ||
+						(y < 0 && start_angle <= angle_180) ||
+						(y == 0 && start_angle <= angle_180 && x < 0) ||
+						(y == 0 && start_angle == 0 && x > 0)
+					) && (
+						(y > 0 && end_angle < angle_180 && x >= y * eslope) ||
+						(y < 0 && end_angle > angle_180 && x <= y * eslope) ||
+						(y > 0 && end_angle >= angle_180) ||
+						(y == 0 && end_angle >= angle_180 && x < 0) ||
+						(y == 0 && start_angle == 0 && x > 0)
+					)
+				)
+				graphics_draw_pixel(ctx, GPoint(center.x+x, center.y+y));
+			}
+		}
+	}
 }
 
 static void analog_face_update_proc(Layer* layer, GContext* ctx) {
+  //Fill in the bg white
+  graphics_context_set_fill_color(ctx, GColorWhite);
+  graphics_fill_rect(ctx, layer_get_bounds(layer), 0, GCornerNone);
+
   graphics_context_set_fill_color(ctx, GColorBlack);
-  GRect bounds = layer_get_bounds(layer);
-  // int r = (bounds.size.w < bounds.size.h ? bounds.size.w : bounds.size.h) / 2;
-  graphics_draw_circle(ctx, grect_center_point(&bounds), 70);
-  
   for(int i = 0; i < NUM_CLOCK_TICKS; ++i)
     gpath_draw_filled(ctx, tick_paths[i]);
-  
-  //graphics_draw_arc(ctx, grect_center_point(&bounds), 70, 4, angle_90 / 2, angle_180 / 2, GColorBlack);
+  GRect bounds = layer_get_bounds(layer);
+  int r = (bounds.size.w < bounds.size.h ? bounds.size.w : bounds.size.h) / 2;
+  graphics_draw_circle(ctx, grect_center_point(&bounds), r); //6 before
+  graphics_draw_arc(ctx, grect_center_point(&bounds), lim_dim/2, 4, angle_90, angle_180, GColorBlack);
+  graphics_draw_arc(ctx, grect_center_point(&bounds), lim_dim/2 - 4, 4, angle_180, angle_270, GColorBlack);
+
 }
 
 static void hands_update_proc(Layer* layer, GContext* ctx) {
   GRect bounds = layer_get_bounds(layer); //This will NOT be the whole clock face... Just where the analog piece lives
   const GPoint center = grect_center_point(&bounds); //Center of clock face
-  const int16_t lim_dim = (bounds.size.w < bounds.size.h ? bounds.size.w : bounds.size.h); //we'll use smaller dimension as radius for second hand
+  lim_dim = (bounds.size.w < bounds.size.h ? bounds.size.w : bounds.size.h); //we'll use smaller dimension as radius for second hand
   const int16_t second_hand_length = lim_dim / 2;
   GPoint second_hand;
   time_t now = time(NULL);
@@ -183,57 +288,31 @@ static void hands_update_proc(Layer* layer, GContext* ctx) {
 
 static void handle_second_tick(struct tm* tick_time, TimeUnits units_changed) {
   if(units_changed & MINUTE_UNIT) {
-    layer_mark_dirty(header_layer);
+    //Update digital clock: layer_mark_dirty(digital_clock_layer);
+	 //APP_LOG(APP_LOG_LEVEL_DEBUG, "Time flies WHEN YOUR HACKAFUN!");
   }
-  if(units_changed & HOUR_UNIT) {
-    //Grab events?
+  if(units_changed & DAY_UNIT) {
+    //Update date: layer_mark_dirty(date_layer);
   }
   layer_mark_dirty(analog_face_layer);
 }
 
 static void window_load(Window* window) {
   Layer* window_layer = window_get_root_layer(window);
+  GRect bounds = layer_get_bounds(window_layer);
 
-  analog_face_layer = layer_create(GRect(0, 20, 144, 148)); //CHANGE THIS TO LIMIT WHERE THE ANALOG CLOCK GOES!!!
+  analog_face_layer = layer_create(bounds); //CHANGE THIS TO LIMIT WHERE THE ANALOG CLOCK GOES!!!
   layer_set_update_proc(analog_face_layer, analog_face_update_proc);
   layer_add_child(window_layer, analog_face_layer);
 
   hands_layer = layer_create(layer_get_bounds(analog_face_layer));
   layer_set_update_proc(hands_layer, hands_update_proc);
   layer_add_child(analog_face_layer, hands_layer);
-
-  header_layer = layer_create(GRect(0, 0, 144, 20));
-  layer_set_update_proc(header_layer, header_update_proc);
-  layer_add_child(window_layer, header_layer);
-  
-  text_time_layer = text_layer_create(GRect(0, 0, 72, 20));
-  text_layer_set_text_alignment(text_time_layer, GTextAlignmentCenter);
-  text_layer_set_text(text_time_layer, time_buffer);
-  text_layer_set_text_color(text_time_layer, GColorWhite);
-  text_layer_set_background_color(text_time_layer, GColorBlack);
-
-  date_layer = text_layer_create(GRect(72, 0, 52, 20));
-  text_layer_set_text_alignment(date_layer, GTextAlignmentCenter);
-  text_layer_set_text_color(date_layer, GColorWhite);
-  text_layer_set_background_color(date_layer, GColorBlack);
-
-  num_layer = text_layer_create(GRect(124, 0, 20, 20));
-  text_layer_set_text_alignment(num_layer, GTextAlignmentCenter);
-  text_layer_set_text_color(num_layer, GColorWhite);
-  text_layer_set_background_color(num_layer, GColorBlack);
- 
-  layer_add_child(header_layer, text_layer_get_layer(text_time_layer));
-  layer_add_child(header_layer, text_layer_get_layer(date_layer));
-  layer_add_child(header_layer, text_layer_get_layer(num_layer));
 }
 
 static void window_unload(Window* window) {
   layer_destroy(analog_face_layer);
   layer_destroy(hands_layer);
-  layer_destroy(header_layer);
-  text_layer_destroy(text_time_layer);
-  text_layer_destroy(date_layer);
-  text_layer_destroy(num_layer);
 }
 
 static void init(void) {
@@ -248,7 +327,6 @@ static void init(void) {
 
   initArray(&events,48);
 
-
   for(int i = 0; i < NUM_CLOCK_TICKS; ++i)
     tick_paths[i] = gpath_create(&ANALOG_BG_POINTS[i]);
   
@@ -258,22 +336,22 @@ static void init(void) {
   window_stack_push(window, animated);
   
   //Put this down here so that the window is the updated window (i.e. with fullscreen)
-  GRect bounds = layer_get_bounds(analog_face_layer);
+  Layer* window_layer = window_get_root_layer(window);
+  GRect bounds = layer_get_bounds(window_layer);
   const GPoint center = grect_center_point(&bounds);
   gpath_move_to(minute_hand, center);
   gpath_move_to(hour_hand, center);
 
   tick_timer_service_subscribe(SECOND_UNIT, handle_second_tick);
-
-
    app_message_register_inbox_received(in_received_handler);
    app_message_register_inbox_dropped(in_dropped_handler);
    app_message_register_outbox_sent(out_sent_handler);
    app_message_register_outbox_failed(out_failed_handler);
+
    const uint32_t inbound_size = 1024;
    const uint32_t outbound_size = 8;
    app_message_open(inbound_size, outbound_size);
-
+  // app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum());
 }
 
 static void deinit(void) {
