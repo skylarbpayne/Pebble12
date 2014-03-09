@@ -37,17 +37,40 @@ typedef struct {
         char *title;
 } Event;
 
-bool isInNextTweleveHours(int JulianDate,int minutesSinceMidnight) {
-	int daysSinceEpoc = JulianDate - EPOC_OFFSET;
-	long eventTime = daysSinceEpoc * SECONDS_IN_DAY + SECONDS_IN_MINUTE * minutesSinceMidnight;
-//	APP_LOG(APP_LOG_LEVEL_DEBUG, "Julian %d, starting minutes: %d, eventTime %lu",JulianDate,minutesSinceMidnight,eventTime);
+int getMinutesPast12() {
+	struct tm *theTime;
+	time_t tim;
+	time(&tim);
+	theTime = localtime(&tim);
+	int hours = theTime->tm_hour;
+	int minutes = theTime->tm_min;
+	return (hours * 60 + minutes);
+}
 
+long calculateLinuxTime(int JulianDate, int minuteOffset) {
+	int daysSinceEpoc = JulianDate - EPOC_OFFSET;
+        return daysSinceEpoc * SECONDS_IN_DAY + SECONDS_IN_MINUTE * minuteOffset;
+}
+long currentLinuxTime() {
 	time_t now;
-  	 time(&now);
-   	long nowTime = (long) now;
-	int minutes = (int) ((eventTime - nowTime) / SECONDS_IN_MINUTE);
-//	APP_LOG(APP_LOG_LEVEL_DEBUG, "minutes difference: %d",minutes);
-	if(minutes <= 12*60 && minutes > 0) //greater than 12 hours worth of minutes
+        time(&now);
+        return (long) now;
+}
+
+int minutesToAngle(int minutes) {
+       return (int) ((minutes / 2) * angle_1) % TRIG_MAX_ANGLE;
+}
+
+bool isInNextTweleveHours(Event e) {
+
+	long startTime = calculateLinuxTime(e.start_day,e.start_time);
+	long nowTime = currentLinuxTime();
+	long endTime = calculateLinuxTime(e.end_day,e.end_time);
+
+	long tweleveHoursLater = nowTime + 60 * 60 * 12; //60 seconds * 60 minutes * 12 hours
+	
+	APP_LOG(APP_LOG_LEVEL_DEBUG, "startTime: %lu nowTime: %lu endTime %lu",startTime,nowTime,endTime);
+	if(endTime > nowTime && startTime < tweleveHoursLater)
 		return true;
 	else
 		return false;
@@ -72,26 +95,23 @@ int duration(int startDate, int startMinutes, int endDate, int endMinutes) {
 }
 
 int calculateStartingAngle(Event e) {
-	int startDay = e.start_day;
-	int endDay = e.end_day;
 	int startTime = e.start_time;
-	int endTime = e.end_time;
 	int actualMinutes; //Offset minutes, beacause of 12 hours
-//        APP_LOG(APP_LOG_LEVEL_DEBUG, "startingTime: %d", startTime);
+	
+	long startingTime = calculateLinuxTime(e.start_day,e.start_time);
+	long now = currentLinuxTime();
+
+	if (startingTime < now){
+		int time = getMinutesPast12();
+		return	minutesToAngle(time);
+	}
 
 	if (startTime > 720) {
-		actualMinutes = startTime - 720;
+		actualMinutes = startTime % 720;
 	} else {
 		actualMinutes = startTime;
 	}
-
-//	APP_LOG(APP_LOG_LEVEL_DEBUG, "actualMinutes: %d", actualMinutes);
-//        APP_LOG(APP_LOG_LEVEL_DEBUG, "angle_1: %d", (int) angle_1);
-
-
-	int angle = (int) ((actualMinutes / 2) * angle_1) % TRIG_MAX_ANGLE;
-//	APP_LOG(APP_LOG_LEVEL_DEBUG, "Starting angle: %d", angle);
-	return angle;
+	return minutesToAngle(actualMinutes);
 
 }
 
@@ -103,9 +123,7 @@ int calculateEndingAngle(Event e,int startingAngle) {
 	int angle;
 	int dur = duration(startDay,startTime,endDay,endTime);
 
-	time_t now;
-        time(&now);
-        long nowTime = (long) now;
+	long nowTime = currentLinuxTime();
 
         int daysSinceEpoc = startDay - EPOC_OFFSET;
         long epoc_start_time = daysSinceEpoc * SECONDS_IN_DAY + SECONDS_IN_MINUTE * startTime;
@@ -115,11 +133,9 @@ int calculateEndingAngle(Event e,int startingAngle) {
 	if (dur >= 720){ //If it's longer than 12 hours
 		angle = (int) (startingAngle + TRIG_MAX_ANGLE - angle_1) % TRIG_MAX_ANGLE;
 	} else if(epoc_start_time + dur * 60 > (nowTime + 60 * 60 * 12)) { //If the ending is longer than the current time 12 hours from now
-		int overtime = (int) ((dur * 60 + epoc_start_time) - nowTime);
-		int finalTime = startTime + dur - overtime;
-		finalTime = finalTime % 720;
-		angle = (int) ((finalTime / 2) * angle_1);
-	        APP_LOG(APP_LOG_LEVEL_DEBUG, "Ending angle beyond clock. Overtime: %d finaltime %d", overtime,finalTime);
+		int currentMinutes = getMinutesPast12();
+		angle = (int) ((currentMinutes / 2) * angle_1);
+//	        APP_LOG(APP_LOG_LEVEL_DEBUG, "Ending angle beyond clock. Overtime: %d finaltime %d", overtime,finalTime);
 
 	}
 	else {
@@ -170,7 +186,6 @@ void freeArray(Array *a) {
   a->array = NULL;
   a->used = a->size = 0;
 }
-
 
 void removeElement(Array *a, Event e) {
         unsigned int i = 0;
@@ -240,15 +255,17 @@ void out_sent_handler(DictionaryIterator *sent, void *context) {
    // incoming message dropped
  }
 
+
+//WHY IS THIS BEING CALLED EVERY SECOND, RATHER THAN EVERY MINUTE
 static void arc_update_proc(Layer* layer, GContext* ctx) {
 	GRect bounds = layer_get_bounds(layer);
   	int r = (bounds.size.w < bounds.size.h ? bounds.size.w : bounds.size.h) / 2;
 	for(unsigned int i = 0; i < events.used; i++) {
- 		if(isInNextTweleveHours(events.array[i].start_day,events.array[i].start_time)) {
+ 		if(isInNextTweleveHours(events.array[i])) {
                 	int startingAngle = calculateStartingAngle(events.array[i]);
                 	int endingAngle = calculateEndingAngle(events.array[i],startingAngle);
 			//All angles are off by 90 degrees, so set this offset
-                	graphics_draw_arc(ctx, grect_center_point(&bounds), r, 4, startingAngle - angle_90, endingAngle - angle_90, GColorBlack);
+                	graphics_draw_arc(ctx, grect_center_point(&bounds), r, 8, startingAngle - angle_90, endingAngle - angle_90, GColorBlack);
 		}
           }	
 	//graphics_draw_arc(ctx, grect_center_point(&bounds), r, 4, -1 * angle_90, angle_180, GColorBlack);
@@ -409,11 +426,6 @@ static void init(void) {
    const uint32_t inbound_size = 1024;
    const uint32_t outbound_size = 8;
    app_message_open(inbound_size, outbound_size);
-   time_t now;
-   time(&now);
-   long millseconds = (long) now;
-   
-
 }
 
 static void deinit(void) {
