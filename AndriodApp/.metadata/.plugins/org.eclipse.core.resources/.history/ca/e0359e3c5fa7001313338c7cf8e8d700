@@ -61,9 +61,6 @@ public class Pebble {
         	  @Override
         	  public void receiveAck(Context context, int transactionId) {
         	    Log.i(MainActivity.TAG, "Received ack for transaction " + transactionId);
-        	    
-        	    //Once it's been sent successfully, remove it from the hashmap
-        	    PebbleDictionary reData = pending_events.remove(transactionId);
         	  }
         	});
 
@@ -74,9 +71,8 @@ public class Pebble {
         	    
         	    //Resubmit data that was Nacked
         	    PebbleDictionary reData = pending_events.get(transactionId);
-        	    if(reData != null) {
-        	    	PebbleKit.sendDataToPebbleWithTransactionId(ctx, PEBBLE_APP_UUID, reData,COUNTER);
-        	    }
+        		PebbleKit.sendDataToPebbleWithTransactionId(ctx, PEBBLE_APP_UUID, reData,COUNTER);
+
         	    
         	  }
         	});

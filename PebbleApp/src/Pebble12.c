@@ -2,9 +2,12 @@
 #include "arcs.h"
 #include "string.h"
 #include "stdlib.h"
+#include "pebble.h"
+#include <time.h>
 
 Layer* analog_face_layer;
 Layer* hands_layer;
+Layer* arc_layer;
 
 Layer* header_layer;
 TextLayer* text_time_layer;
@@ -14,12 +17,17 @@ TextLayer* num_layer;
 char date_buffer[] = "xxxxxx";
 char num_buffer[] = "0000";
 
+static double angle_1 = TRIG_MAX_ANGLE / 360;
+
 static GPath* minute_hand; //Will be used to store shape of minute hand
 static GPath* hour_hand; //Same ^^ but for hour hand
 static GPath* tick_paths[NUM_CLOCK_TICKS]; //stores all positions of marks on analog face
 
+static const int EPOC_OFFSET = 2440588; //Days between Julian and current date
+static const long SECONDS_IN_DAY = 86400;
+static const int SECONDS_IN_MINUTE = 60;
+static const long SECONDS_IN_HOUR = 3600;
 Window* window;
-
 
 typedef struct {
         int start_day;
@@ -29,6 +37,102 @@ typedef struct {
         char *title;
 } Event;
 
+bool isInNextTweleveHours(int JulianDate,int minutesSinceMidnight) {
+	int daysSinceEpoc = JulianDate - EPOC_OFFSET;
+	long eventTime = daysSinceEpoc * SECONDS_IN_DAY + SECONDS_IN_MINUTE * minutesSinceMidnight;
+//	APP_LOG(APP_LOG_LEVEL_DEBUG, "Julian %d, starting minutes: %d, eventTime %lu",JulianDate,minutesSinceMidnight,eventTime);
+
+	time_t now;
+  	 time(&now);
+   	long nowTime = (long) now;
+	int minutes = (int) ((eventTime - nowTime) / SECONDS_IN_MINUTE);
+//	APP_LOG(APP_LOG_LEVEL_DEBUG, "minutes difference: %d",minutes);
+	if(minutes <= 12*60 && minutes > 0) //greater than 12 hours worth of minutes
+		return true;
+	else
+		return false;
+}
+
+//Duration in minutes
+//TODO: Change to the duration within the current visible screen
+int duration(int startDate, int startMinutes, int endDate, int endMinutes) {
+//	APP_LOG(APP_LOG_LEVEL_DEBUG, "startDate: %d, startMin: %d, endDate: %d, endMin: %d", startDate,startMinutes,endDate, endMinutes);
+
+	int daysSinceEpocStart = startDate - EPOC_OFFSET;
+        long startTime = daysSinceEpocStart * SECONDS_IN_DAY + SECONDS_IN_MINUTE * startMinutes;
+//        APP_LOG(APP_LOG_LEVEL_DEBUG, "startTime: %lu", startTime);
+
+        int daysSinceEpocEnd = endDate - EPOC_OFFSET;
+	long endTime = daysSinceEpocEnd * SECONDS_IN_DAY + SECONDS_IN_MINUTE * endMinutes;
+//        APP_LOG(APP_LOG_LEVEL_DEBUG, "endTime: %lu", endTime);
+
+	int numberOfMinutes = (int) ((endTime - startTime) / SECONDS_IN_MINUTE);
+//        APP_LOG(APP_LOG_LEVEL_DEBUG, "Duration: %d", numberOfMinutes);
+	return numberOfMinutes;
+}
+
+int calculateStartingAngle(Event e) {
+	int startDay = e.start_day;
+	int endDay = e.end_day;
+	int startTime = e.start_time;
+	int endTime = e.end_time;
+	int actualMinutes; //Offset minutes, beacause of 12 hours
+//        APP_LOG(APP_LOG_LEVEL_DEBUG, "startingTime: %d", startTime);
+
+	if (startTime > 720) {
+		actualMinutes = startTime - 720;
+	} else {
+		actualMinutes = startTime;
+	}
+
+//	APP_LOG(APP_LOG_LEVEL_DEBUG, "actualMinutes: %d", actualMinutes);
+//        APP_LOG(APP_LOG_LEVEL_DEBUG, "angle_1: %d", (int) angle_1);
+
+
+	int angle = (int) ((actualMinutes / 2) * angle_1) % TRIG_MAX_ANGLE;
+//	APP_LOG(APP_LOG_LEVEL_DEBUG, "Starting angle: %d", angle);
+	return angle;
+
+}
+
+int calculateEndingAngle(Event e,int startingAngle) {
+ 	int startDay = e.start_day;
+        int endDay = e.end_day;
+        int startTime = e.start_time;
+        int endTime = e.end_time;
+	int angle;
+	int dur = duration(startDay,startTime,endDay,endTime);
+
+	time_t now;
+        time(&now);
+        long nowTime = (long) now;
+
+        int daysSinceEpoc = startDay - EPOC_OFFSET;
+        long epoc_start_time = daysSinceEpoc * SECONDS_IN_DAY + SECONDS_IN_MINUTE * startTime;
+
+        APP_LOG(APP_LOG_LEVEL_DEBUG, "startTime:  %d nowTime: %lu duration: %d, epoc_start_time %lu ", startTime,nowTime,dur,epoc_start_time);
+
+	if (dur >= 720){ //If it's longer than 12 hours
+		angle = (int) (startingAngle + TRIG_MAX_ANGLE - angle_1) % TRIG_MAX_ANGLE;
+	} else if(epoc_start_time + dur * 60 > (nowTime + 60 * 60 * 12)) { //If the ending is longer than the current time 12 hours from now
+		int overtime = (int) ((dur * 60 + epoc_start_time) - nowTime);
+		int finalTime = startTime + dur - overtime;
+		finalTime = finalTime % 720;
+		angle = (int) ((finalTime / 2) * angle_1);
+	        APP_LOG(APP_LOG_LEVEL_DEBUG, "Ending angle beyond clock. Overtime: %d finaltime %d", overtime,finalTime);
+
+	}
+	else {
+		int totalTime = startTime + dur;
+		totalTime = totalTime % 720; //reset every 720 minutes, so we go back.
+		angle = (int) ((totalTime / 2) * angle_1);
+	}
+        APP_LOG(APP_LOG_LEVEL_DEBUG, "Ending angle: %d", angle);
+	return angle;
+}
+
+
+
 typedef struct {
   Event *array;
   size_t used;
@@ -36,6 +140,15 @@ typedef struct {
 } Array;
 
 Array events;
+
+long gregorian_calendar_to_jd(int y, int m, int d) {
+	y+=8000;
+	if(m<3) { y--; m+=12; }
+	return (y*365) +(y/4) -(y/100) +(y/400) -1200820
+              +(m*153+3)/5-92
+              +d-1
+	;
+}
 
 //ALWAYS USE SIZE 48, because that's a lot.
 void initArray(Array *a, size_t initialSize) {
@@ -116,6 +229,9 @@ void out_sent_handler(DictionaryIterator *sent, void *context) {
           } else {
                 removeElement(&events,e);
           }
+	//Mark the layer dirty whenever we get new messages
+	layer_mark_dirty(arc_layer);
+
 
 }
 
@@ -123,6 +239,21 @@ void out_sent_handler(DictionaryIterator *sent, void *context) {
  void in_dropped_handler(AppMessageResult reason, void *context) {
    // incoming message dropped
  }
+
+static void arc_update_proc(Layer* layer, GContext* ctx) {
+	GRect bounds = layer_get_bounds(layer);
+  	int r = (bounds.size.w < bounds.size.h ? bounds.size.w : bounds.size.h) / 2;
+	for(unsigned int i = 0; i < events.used; i++) {
+ 		if(isInNextTweleveHours(events.array[i].start_day,events.array[i].start_time)) {
+                	int startingAngle = calculateStartingAngle(events.array[i]);
+                	int endingAngle = calculateEndingAngle(events.array[i],startingAngle);
+			//All angles are off by 90 degrees, so set this offset
+                	graphics_draw_arc(ctx, grect_center_point(&bounds), r, 4, startingAngle - angle_90, endingAngle - angle_90, GColorBlack);
+		}
+          }	
+	//graphics_draw_arc(ctx, grect_center_point(&bounds), r, 4, -1 * angle_90, angle_180, GColorBlack);
+	//graphics_draw_arc(ctx, grect_center_point(&bounds), r - 4, 4, angle_180, angle_270, GColorBlack);
+}
 
 
 static void header_update_proc(Layer* layer, GContext* ctx) {
@@ -184,6 +315,7 @@ static void hands_update_proc(Layer* layer, GContext* ctx) {
 static void handle_second_tick(struct tm* tick_time, TimeUnits units_changed) {
   if(units_changed & MINUTE_UNIT) {
     layer_mark_dirty(header_layer);
+    layer_mark_dirty(arc_layer); //We have to update this to show events that passed over the hands
   }
   if(units_changed & HOUR_UNIT) {
     //Grab events?
@@ -195,8 +327,12 @@ static void window_load(Window* window) {
   Layer* window_layer = window_get_root_layer(window);
 
   analog_face_layer = layer_create(GRect(0, 20, 144, 148)); //CHANGE THIS TO LIMIT WHERE THE ANALOG CLOCK GOES!!!
+  arc_layer = layer_create(GRect(0, 20, 144, 148));
+
   layer_set_update_proc(analog_face_layer, analog_face_update_proc);
   layer_add_child(window_layer, analog_face_layer);
+  layer_add_child(window_layer,arc_layer);
+  layer_set_update_proc(arc_layer,arc_update_proc);
 
   hands_layer = layer_create(layer_get_bounds(analog_face_layer));
   layer_set_update_proc(hands_layer, hands_update_proc);
@@ -273,6 +409,10 @@ static void init(void) {
    const uint32_t inbound_size = 1024;
    const uint32_t outbound_size = 8;
    app_message_open(inbound_size, outbound_size);
+   time_t now;
+   time(&now);
+   long millseconds = (long) now;
+   
 
 }
 

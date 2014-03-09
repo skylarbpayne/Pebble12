@@ -75,7 +75,7 @@ public class Pebble {
         	    //Resubmit data that was Nacked
         	    PebbleDictionary reData = pending_events.get(transactionId);
         	    if(reData != null) {
-        	    	PebbleKit.sendDataToPebbleWithTransactionId(ctx, PEBBLE_APP_UUID, reData,COUNTER);
+        		PebbleKit.sendDataToPebbleWithTransactionId(ctx, PEBBLE_APP_UUID, reData,COUNTER);
         	    }
         	    
         	  }

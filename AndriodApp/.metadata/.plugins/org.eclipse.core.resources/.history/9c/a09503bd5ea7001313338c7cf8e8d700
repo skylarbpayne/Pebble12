@@ -61,9 +61,6 @@ public class Pebble {
         	  @Override
         	  public void receiveAck(Context context, int transactionId) {
         	    Log.i(MainActivity.TAG, "Received ack for transaction " + transactionId);
-        	    
-        	    //Once it's been sent successfully, remove it from the hashmap
-        	    PebbleDictionary reData = pending_events.remove(transactionId);
         	  }
         	});
 
@@ -71,12 +68,9 @@ public class Pebble {
         	  @Override
         	  public void receiveNack(Context context, int transactionId) {
         	    Log.i(MainActivity.TAG, "Received nack for transaction " + transactionId);
-        	    
-        	    //Resubmit data that was Nacked
         	    PebbleDictionary reData = pending_events.get(transactionId);
-        	    if(reData != null) {
-        	    	PebbleKit.sendDataToPebbleWithTransactionId(ctx, PEBBLE_APP_UUID, reData,COUNTER);
-        	    }
+        		PebbleKit.sendDataToPebbleWithTransactionId(ctx, PEBBLE_APP_UUID, reData,COUNTER);
+
         	    
         	  }
         	});
@@ -108,12 +102,9 @@ public class Pebble {
 		data.addInt32(5,e.endTime);
 		data.addString(6, e.title);
 		pending_events.put(COUNTER, data);
-		Log.i(MainActivity.TAG, "start time:" + e.startTime);
-		Log.i(MainActivity.TAG, "start day:" + e.startDay);
 
-		pending_events.put(COUNTER, data);
-		PebbleKit.sendDataToPebbleWithTransactionId(ctx, PEBBLE_APP_UUID, data,COUNTER); //counter is also transaction ID
 		COUNTER++;
+		PebbleKit.sendDataToPebbleWithTransactionId(ctx, PEBBLE_APP_UUID, data,COUNTER); //counter is also transaction ID
 		
 	}
 
